@@ -1,0 +1,118 @@
+{
+  "name": "dsh-connect-loomy",
+  "displayName": "DSH Connect Loomy",
+  "description": "把讯飞 Loomy 模型与多账号池接入 DeepSeek Harness：支持免客户端微信扫码与短信登录、自动同步官方模型目录与积分倍率、多账号同模型自动换号、兑换码、模型测速与积分胶囊。",
+  "version": "0.2.0",
+  "author": "HongKongDoll-cmd <changlongwu182@gmail.com>",
+  "license": "MIT",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "loomy",
+    "iflytek",
+    "model-provider",
+    "credits"
+  ],
+  "type": "module",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "icon": "./icons/dsh-connect-loomy-128.png",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./icons/dsh-connect-loomy-128.png": "./icons/dsh-connect-loomy-128.png",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "icons",
+    "icon.svg",
+    "locale",
+    "cordis.patch.yml",
+    "docs/PRIVACY.md",
+    "README.md",
+    "README.en.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prepare": "npm run build",
+    "prepack": "npm run build && npm run check:pii",
+    "build": "tsdown && node scripts/verify-entry-artifacts.mjs",
+    "dev": "tsdown --watch",
+    "verify:entries": "node scripts/verify-entry-artifacts.mjs",
+    "check:pii": "node scripts/check-pii.mjs",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.client.json",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run build && npm run check:pii && npm run test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HongKongDoll-cmd/dsh-connect-loomy.git"
+  },
+  "homepage": "https://github.com/HongKongDoll-cmd/dsh-connect-loomy#readme",
+  "bugs": {
+    "url": "https://github.com/HongKongDoll-cmd/dsh-connect-loomy/issues"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-settings-plugins",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "3.19.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.1-rc.1 <5.0.0 || >=4.0.2 <5.0.0",
+    "@deepseek-ai/dsh-atomic-write": ">=0.1.7-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-attachment": ">=0.1.7-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0.1.7-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-renderer": ">=0.1.7-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.1.7-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-home-paths": ">=0.1.7-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-host-webserver": ">=0.1.7-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-llm": ">=0.1.7-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-llm-pi-ai": ">=0.1.7-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-settings": ">=0.1.7-rc.1 <0.3.0-0",
+    "@deepseek-ai/schemastery": ">=3.18.1-rc.1 <4.0.0 || >=3.18.2 <4.0.0",
+    "@earendil-works/pi-ai": ">=0.85.0 <0.88.0 || >=1.0.0-0 <2.0.0",
+    "react": "^18.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-client-ui-primitives": { "optional": true },
+    "@deepseek-ai/dsh-client-ui-renderer": { "optional": true },
+    "@deepseek-ai/dsh-client-ui-settings": { "optional": true },
+    "@earendil-works/pi-ai": { "optional": true },
+    "react": { "optional": true }
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "@types/react": "~18.3.31",
+    "@types/react-dom": "18.3.7",
+    "jsdom": "^29.1.1",
+    "react": "^18.3.1",
+    "react-dom": "18.3.1",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.8"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Loomy Connect",
+    "description": "Connect iFlyTek Loomy models and a multi-account pool to DeepSeek Harness: supports WeChat QR scan and SMS sign-in (works without installing the Loomy desktop client), desktop session auto-detection, per-account points balances, and automatic same-model failover across accounts."
+  }
+}

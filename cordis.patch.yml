@@ -1,0 +1,5 @@
+# Register the Loomy provider without changing the profile's default model.
+# The plugin reuses the Loomy desktop app's sign-in session or a saved token.
+- insert:
+    - id: dsh-connect-loomy
+      name: dsh-connect-loomy
