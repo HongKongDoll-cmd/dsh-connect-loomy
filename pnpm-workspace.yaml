@@ -1,0 +1,10 @@
+packages:
+  - '.'
+
+# Follow upstream prereleases (dsh-* rc / pi-ai) pinned by pnpm-lock.yaml without
+# triggering pnpm 11's 24h minimum-release-age gate.
+minimumReleaseAge: 0
+
+allowBuilds:
+  '@google/genai': false
+  protobufjs: false
