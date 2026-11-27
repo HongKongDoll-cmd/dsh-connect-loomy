@@ -2,7 +2,7 @@
   "name": "dsh-connect-loomy",
   "displayName": "DSH Connect Loomy",
   "description": "把讯飞 Loomy 模型与多账号池接入 DeepSeek Harness：支持免客户端微信扫码与短信登录、自动同步官方模型目录与积分倍率、多账号同模型自动换号、兑换码、模型测速与积分胶囊。",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": "HongKongDoll-cmd <changlongwu182@gmail.com>",
   "license": "MIT",
   "keywords": [

@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { foldModernContext, loomyThinkingLevelMap, toPiDescriptor } from '../src/adapter.ts'
+import {
+  dropThinkingFromContext,
+  foldModernContext,
+  loomyThinkingLevelMap,
+  toPiDescriptor,
+} from '../src/adapter.ts'
 import { FALLBACK_LOOMY_MODELS } from '../src/catalog.ts'
 import { selectedProviderOf } from '../src/status-paths.ts'
 import { resolveRequestUrl } from '../src/client/request-url.ts'
@@ -42,6 +47,50 @@ describe('adapter helpers', () => {
       toolsAdded: [{ name: 'bash' }],
     })
     expect(folded.messages[1]).toEqual({ role: 'user', content: 'hi' })
+  })
+
+  it('drops cross-provider thinking unconditionally and same-provider thinking when dropAll is true', () => {
+    const ctx = {
+      messages: [
+        {
+          role: 'assistant' as const,
+          provider: 'raccoon',
+          api: 'dsh-foreign',
+          model: 'other',
+          content: [
+            { type: 'thinking' as const, thinking: 'foreign reasoning' },
+            { type: 'text' as const, text: 'foreign reply' },
+          ],
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          stopReason: 'stop' as const,
+          timestamp: 0,
+        },
+        {
+          role: 'assistant' as const,
+          provider: 'loomy',
+          api: 'openai-completions',
+          model: 'deepseek-v4-flash-1017',
+          content: [
+            { type: 'thinking' as const, thinking: 'loomy reasoning', thinkingSignature: 'reasoning_content' },
+            { type: 'text' as const, text: 'loomy reply' },
+          ],
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          stopReason: 'stop' as const,
+          timestamp: 0,
+        },
+      ],
+    }
+
+    const normal = dropThinkingFromContext(ctx as never, { dropAll: false })
+    expect((normal.messages[0] as { content: unknown[] }).content).toEqual([
+      { type: 'text', text: 'foreign reply' },
+    ])
+    expect((normal.messages[1] as { content: unknown[] }).content).toHaveLength(2)
+
+    const compat = dropThinkingFromContext(ctx as never, { dropAll: true })
+    expect((compat.messages[1] as { content: unknown[] }).content).toEqual([
+      { type: 'text', text: 'loomy reply' },
+    ])
   })
 })
 

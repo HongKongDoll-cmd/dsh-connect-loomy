@@ -75,6 +75,7 @@ async function requestJson(
   const combinedSignal = signal ? AbortSignal.any([signal, timeout]) : timeout
   const headers: Record<string, string> = {
     Accept: 'application/json',
+    'loomy-version': '0.9.39',
     token,
   }
   let encodedBody: string | undefined

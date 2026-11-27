@@ -158,11 +158,44 @@ export function alignLoomyAssistantIdentities(context: Context): Context {
   return changed ? { ...context, messages: next } : context
 }
 
-function wrapApi(api: ProviderStreams, generation: PiAiGeneration): ProviderStreams {
+export function dropThinkingFromContext(
+  context: Context,
+  options: { dropAll?: boolean } = {},
+): Context {
+  const messages = context.messages
+  if (!Array.isArray(messages) || messages.length === 0) return context
+  const dropAll = options.dropAll === true
+  let changed = false
+
+  const next = messages.map(msg => {
+    if (msg === null || typeof msg !== 'object') return msg
+    if (msg.role !== 'assistant' || !Array.isArray(msg.content)) return msg
+    const isForeign = msg.provider !== LOOMY_PROVIDER_ID || msg.api === HOST_FOREIGN_API
+    if (!dropAll && !isForeign) return msg
+    const hasThinking = msg.content.some(
+      block => block !== null && typeof block === 'object' && (block as { type?: unknown }).type === 'thinking',
+    )
+    if (!hasThinking) return msg
+    changed = true
+    const filtered = msg.content.filter(
+      block => !(block !== null && typeof block === 'object' && (block as { type?: unknown }).type === 'thinking'),
+    )
+    return { ...msg, content: filtered }
+  })
+
+  return changed ? { ...context, messages: next } : context
+}
+
+function wrapApi(
+  api: ProviderStreams,
+  generation: PiAiGeneration,
+  shouldDropThinking?: () => boolean,
+): ProviderStreams {
   const prepare = (ctx: unknown): unknown => {
     const raw = ctx as Context
-    const prepared = generation === 'modern' ? foldModernContext(raw) : raw
-    return alignLoomyAssistantIdentities(prepared)
+    const folded = generation === 'modern' ? foldModernContext(raw) : raw
+    const aligned = alignLoomyAssistantIdentities(folded)
+    return dropThinkingFromContext(aligned, { dropAll: shouldDropThinking?.() === true })
   }
   return {
     stream: (model, context, options) => api.stream(model, prepare(context), options),
@@ -244,6 +277,7 @@ export interface LoomyAdapterOptions {
   catalog: LoomyCatalog
   get?: (service: string) => unknown
   defaultThinkingEfforts?: () => Readonly<Record<string, string | undefined>>
+  shouldDropThinking?: () => boolean
 }
 
 export interface LoomyAdapter {
@@ -274,7 +308,7 @@ export function createLoomyAdapter(options: LoomyAdapterOptions): LoomyAdapter {
       },
     },
     models: buildModels(),
-    api: wrapApi(openAICompletionsApi(), generation),
+    api: wrapApi(openAICompletionsApi(), generation, options.shouldDropThinking),
   })
 
   const provider: Provider = {

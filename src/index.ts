@@ -440,6 +440,7 @@ export function apply(ctx: Context, config: LoomyConfig): void {
       catalog,
       get: service => ctx.get(service),
       defaultThinkingEfforts: () => liveConfig.defaultThinkingEfforts,
+      shouldDropThinking: () => liveConfig.dropAllThinking,
     })
 
     syncRegistration()

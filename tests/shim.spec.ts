@@ -1,7 +1,42 @@
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
+import zlib from 'node:zlib'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createLoomyShim } from '../src/shim.ts'
+import {
+  createLoomyShim,
+  MIN_LOOMY_IMAGE_DIM,
+  normalizeRequestPayload,
+  parseDataUrlImageDimensions,
+} from '../src/shim.ts'
+
+function makePngDataUrl(width: number, height: number): string {
+  const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+  const crc32 = (buf: Buffer): number => {
+    let c = 0xffffffff
+    for (const b of buf) {
+      c ^= b
+      for (let i = 0; i < 8; i += 1) c = (c >>> 1) ^ ((c & 1) !== 0 ? 0xedb88320 : 0)
+    }
+    return (c ^ 0xffffffff) >>> 0
+  }
+  const chunk = (type: string, data: Buffer): Buffer => {
+    const t = Buffer.from(type, 'ascii')
+    const len = Buffer.alloc(4)
+    len.writeUInt32BE(data.length, 0)
+    const body = Buffer.concat([t, data])
+    const crc = Buffer.alloc(4)
+    crc.writeUInt32BE(crc32(body), 0)
+    return Buffer.concat([len, body, crc])
+  }
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(width, 0)
+  ihdr.writeUInt32BE(height, 4)
+  ihdr[8] = 8
+  ihdr[9] = 6
+  const idat = zlib.deflateSync(Buffer.alloc((1 + width * 4) * height, 0))
+  const png = Buffer.concat([sig, chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))])
+  return `data:image/png;base64,${png.toString('base64')}`
+}
 
 const cleanups: Array<() => Promise<void>> = []
 
@@ -217,5 +252,104 @@ describe('createLoomyShim', () => {
     expect(seenBody.reasoning_effort).toBe('none')
     expect(seenBody.enable_thinking).toBe(false)
     expect(seenBody.chat_template_kwargs).toEqual({ enable_thinking: false })
+  })
+
+  it('parses PNG dimensions and omits sub-56px images plus empty content before reaching Loomy', () => {
+    const smallPng = makePngDataUrl(32, 32)
+    const okPng = makePngDataUrl(64, 64)
+    expect(parseDataUrlImageDimensions(smallPng)).toEqual({ width: 32, height: 32 })
+    expect(parseDataUrlImageDimensions(okPng)).toEqual({ width: 64, height: 64 })
+    expect(parseDataUrlImageDimensions('https://example.com/a.png')).toBeUndefined()
+
+    const { body, hasImages } = normalizeRequestPayload(JSON.stringify({
+      model: 'deepseek-v4-flash-1017',
+      messages: [
+        { role: 'user', content: '' },
+        { role: 'assistant', content: '', reasoning_content: 'old thought' },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: '' },
+            { type: 'image_url', image_url: { url: smallPng } },
+            { type: 'image_url', image_url: { url: okPng } },
+          ],
+        },
+        { role: 'tool', tool_call_id: 'call_1', content: '' },
+      ],
+    }), true, false)
+
+    const parsed = JSON.parse(body) as { messages: Array<Record<string, unknown>> }
+    expect(hasImages).toBe(true)
+    expect(parsed.messages).toHaveLength(2)
+    expect(parsed.messages[0]?.role).toBe('user')
+    const parts = parsed.messages[0]?.content as Array<Record<string, unknown>>
+    expect(parts).toHaveLength(2)
+    expect(parts[0]).toEqual({
+      type: 'text',
+      text: `[image omitted: 32x32px is below Loomy minimum ${MIN_LOOMY_IMAGE_DIM}x${MIN_LOOMY_IMAGE_DIM}px]`,
+    })
+    expect(parts[1]).toEqual({ type: 'image_url', image_url: { url: okPng } })
+    expect(parsed.messages[1]).toEqual({ role: 'tool', tool_call_id: 'call_1', content: '(no output)' })
+  })
+
+  it('retries once with all images stripped when Loomy rejects an image-bearing request with generic 400', async () => {
+    const okPng = makePngDataUrl(64, 64)
+    const bodies: Array<Record<string, unknown>> = []
+    let seenVersionHeader = ''
+
+    const upstreamUrl = await startMockUpstream((req, body, res) => {
+      seenVersionHeader = String(req.headers['loomy-version'] ?? '')
+      const parsed = JSON.parse(body) as Record<string, unknown>
+      bodies.push(parsed)
+      const hasImg = JSON.stringify(parsed).includes('image_url')
+      if (hasImg) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({
+          error: {
+            message: '请求有误，请重试；若多次出现请更新应用版本',
+            type: 'invalid_request_error',
+            code: 400,
+          },
+        }))
+        return
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({
+        id: 'chatcmpl-recovered',
+        choices: [{ index: 0, message: { role: 'assistant', content: 'recovered' }, finish_reason: 'stop' }],
+      }))
+    })
+
+    const failures: string[] = []
+    const shim = createLoomyShim({
+      resolveSession: async () => 'sess-retry',
+      resolveBaseUrl: () => upstreamUrl,
+      onAccountFailure: (_acc, _m, _k, msg) => failures.push(msg),
+    })
+    cleanups.push(() => shim.close())
+    await shim.ready
+
+    const res = await fetch(`${shim.baseUrl()}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${shim.token()}` },
+      body: JSON.stringify({
+        model: 'deepseek-v4-flash-1017',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'check' },
+              { type: 'image_url', image_url: { url: okPng } },
+            ],
+          },
+        ],
+      }),
+    })
+    expect(res.status).toBe(200)
+    expect(seenVersionHeader).toBe('0.9.39')
+    expect(bodies).toHaveLength(2)
+    expect(failures).toEqual([])
+    const json = (await res.json()) as { choices: Array<{ message: { content: string } }> }
+    expect(json.choices[0]?.message.content).toBe('recovered')
   })
 })
